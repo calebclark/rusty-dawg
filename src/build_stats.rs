@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
-
 use crate::cdawg::Cdawg;
 use crate::graph::indexing::IndexType;
+use crate::graph::TreeGraph;
 use crate::memory_backing::MemoryBacking;
 use crate::weight::Weight;
 
@@ -22,8 +22,8 @@ pub struct BuildStats {
 }
 
 impl BuildStats {
-    pub fn from_cdawg<W, Ix, Mb>(
-        cdawg: &Cdawg<W, Ix, Mb>,
+    pub fn from_cdawg<W, Ix, Mb, G>(
+        cdawg: &Cdawg<W, Ix, Mb, G>,
         n_tokens: usize,
         n_bytes: u64,
         elapsed_time: f32,
@@ -32,6 +32,7 @@ impl BuildStats {
         W: Weight + Serialize + for<'de> Deserialize<'de> + Clone,
         Ix: IndexType,
         Mb: MemoryBacking<W, (Ix, Ix), Ix>,
+        G: TreeGraph<W, (Ix, Ix), Ix, Mb>,
     {
         Self {
             n_tokens,

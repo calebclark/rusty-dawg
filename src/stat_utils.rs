@@ -3,7 +3,7 @@ use std::cmp::Ord;
 use std::fmt::Debug;
 
 use crate::dawg::Dawg;
-use crate::graph::avl_graph::node::NodeRef;
+use crate::graph::avl_graph::avl_node::NodeRef;
 use crate::graph::indexing::{DefaultIx, NodeIndex};
 use crate::memory_backing::MemoryBacking;
 use crate::weight::Weight;

@@ -1,8 +1,8 @@
 mod disk_mut_refs;
 pub mod vec; // Implement VecBacking for DiskVec and DiskVecItem // Raw implementation of DiskVec data structure.
 
-use crate::graph::avl_graph::edge::Edge;
-use crate::graph::avl_graph::node::Node;
+use crate::graph::avl_graph::avl_edge::AvlEdge;
+use crate::graph::avl_graph::avl_node::AvlNode;
 
 use crate::graph::indexing::{EdgeIndex, IndexType, NodeIndex};
 use crate::memory_backing::MemoryBacking;
@@ -46,14 +46,14 @@ where
     N: Weight + Serialize + DeserializeOwned + Default + Clone + Copy,
     E: Copy + Serialize + DeserializeOwned + Default + Copy,
 {
-    type NodeRef = Node<N, Ix>;
-    type EdgeRef = Edge<E, Ix>;
+    type NodeRef = AvlNode<N, Ix>;
+    type EdgeRef = AvlEdge<E, Ix>;
     type NodeMutRef = DiskNodeMutRef<N, Ix>;
     type EdgeMutRef = DiskEdgeMutRef<E, Ix>;
 
     // This Vec type wraps a DiskVec in an Rc<RefCell<..>>
-    type VecN = Vec<Node<N, Ix>>;
-    type VecE = Vec<Edge<E, Ix>>;
+    type VecN = Vec<AvlNode<N, Ix>>;
+    type VecE = Vec<AvlEdge<E, Ix>>;
 
     // The disk-backed implementations of new_node_vec and new_edge_vec should pass file_path when they construct a new Vector.
 

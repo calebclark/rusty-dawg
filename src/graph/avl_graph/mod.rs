@@ -15,19 +15,18 @@ use crate::serde::de::DeserializeOwned;
 use crate::serde::Serialize;
 use std::cmp::{max, min};
 use std::fmt::Debug;
-
+use crate::graph::TreeGraph;
+use crate::graph::comparator::DEFAULT_CMP;
+use crate::graph::{Graph, MutableGraph};
 use crate::graph::indexing::{DefaultIx, EdgeIndex, IndexType, NodeIndex};
 use crate::memory_backing::{CacheConfig, DiskVec};
 use crate::weight::Weight;
-
-mod comparator;
-pub mod edge;
-pub mod node;
+pub mod avl_edge;
+pub mod avl_node;
 mod serde;
 
-use self::comparator::DEFAULT_CMP;
-pub use self::edge::{Edge, EdgeMutRef, EdgeRef};
-pub use self::node::{Node, NodeMutRef, NodeRef};
+pub use self::avl_edge::{AvlEdge, EdgeMutRef, EdgeRef};
+pub use self::avl_node::{AvlNode, NodeMutRef, NodeRef};
 
 use crate::memory_backing::{disk_backing, DiskBacking, MemoryBacking};
 use crate::memory_backing::{RamBacking, VecBacking};
@@ -131,7 +130,7 @@ where
     Ix: IndexType,
 {
     pub fn add_node(&mut self, weight: N) -> NodeIndex<Ix> {
-        let node = Node::new(weight);
+        let node = AvlNode::new(weight);
         let node_idx = NodeIndex::new(self.nodes.len());
         assert!(<Ix as IndexType>::max_value().index() == !0 || NodeIndex::end() != node_idx);
         self.nodes.push(node);
@@ -146,7 +145,7 @@ where
         }
 
         let edge_to_clone = &self.edges.index(first_source_idx.index());
-        let first_clone_edge = Edge::new(edge_to_clone.get_weight(), edge_to_clone.get_target());
+        let first_clone_edge = AvlEdge::new(edge_to_clone.get_weight(), edge_to_clone.get_target());
         let first_clone_idx = EdgeIndex::new(self.edges.len());
         self.edges.push(first_clone_edge);
         self.nodes
@@ -166,7 +165,7 @@ where
         if left != EdgeIndex::end() {
             let left_weight = self.edges.index(left.index()).get_weight();
             let left_target = self.edges.index(left.index()).get_target();
-            let new_left_edge = Edge::new(left_weight, left_target);
+            let new_left_edge = AvlEdge::new(left_weight, left_target);
             let new_left = EdgeIndex::new(self.edges.len());
             self.edges.push(new_left_edge);
             // FIXME: Handle case where
@@ -177,7 +176,7 @@ where
         if right != EdgeIndex::end() {
             let right_weight = self.edges.index(right.index()).get_weight();
             let right_target = self.edges.index(right.index()).get_target();
-            let new_right_edge = Edge::new(right_weight, right_target);
+            let new_right_edge = AvlEdge::new(right_weight, right_target);
             let new_right = EdgeIndex::new(self.edges.len());
             self.edges.push(new_right_edge);
             self.edges.index_mut(new.index()).set_right(new_right);
@@ -252,7 +251,7 @@ where
     ) -> EdgeIndex<Ix> {
         // if we encounter null ptr, we add edge into AVL tree
         if root_edge_idx == EdgeIndex::end() {
-            let edge = Edge::new(weight, b);
+            let edge = AvlEdge::new(weight, b);
             self.edges.push(edge);
             return EdgeIndex::new(self.edges.len() - 1);
         }
@@ -481,6 +480,35 @@ where
     pub fn get_edge_mut(&mut self, edge: EdgeIndex<Ix>) -> Mb::EdgeMutRef {
         self.edges.index_mut(edge.index())
     }
+
+    pub fn edge_target_cmp(&self, a: NodeIndex<Ix>, weight: E, cmp: Box<dyn Comparator<E>>) -> Option<NodeIndex<Ix>> {
+        let first_edge = self.nodes.index(a.index()).get_first_edge();
+        if first_edge == EdgeIndex::end() {
+            return None;
+        }
+
+        let (e, _last_e) =
+            self.binary_search(first_edge, EdgeIndex::end(), weight, cmp);
+        if e == EdgeIndex::end() {
+            return None;
+        }
+        Some(self.edges.index(e.index()).get_target())
+    }
+
+    pub fn reroute_edge_cmp(&mut self, a: NodeIndex<Ix>, b: NodeIndex<Ix>, weight: E, cmp: Box<dyn Comparator<E>>) -> bool {
+        let first_edge = self.nodes.index(a.index()).get_first_edge();
+        if first_edge == EdgeIndex::end() {
+            return false;
+        }
+
+        let (e, _) =
+            self.binary_search(first_edge, EdgeIndex::end(), weight, cmp);
+        if e == EdgeIndex::end() {
+            return false;
+        }
+        self.edges.index_mut(e.index()).set_target(b);
+        true
+    }
 }
 
 // When there is a Comparator implicitly defined by Eq + Ord.
@@ -500,37 +528,16 @@ where
     }
 
     pub fn reroute_edge(&mut self, a: NodeIndex<Ix>, b: NodeIndex<Ix>, weight: E) -> bool {
-        let first_edge = self.nodes.index(a.index()).get_first_edge();
-        if first_edge == EdgeIndex::end() {
-            return false;
-        }
-
-        let (e, _) =
-            self.binary_search(first_edge, EdgeIndex::end(), weight, Box::new(DEFAULT_CMP));
-        if e == EdgeIndex::end() {
-            return false;
-        }
-        self.edges.index_mut(e.index()).set_target(b);
-        true
+        self.reroute_edge_cmp(a, b, weight, Box::new(DEFAULT_CMP))
     }
 
     pub fn edge_target(&self, a: NodeIndex<Ix>, weight: E) -> Option<NodeIndex<Ix>> {
-        let first_edge = self.nodes.index(a.index()).get_first_edge();
-        if first_edge == EdgeIndex::end() {
-            return None;
-        }
-
-        let (e, _last_e) =
-            self.binary_search(first_edge, EdgeIndex::end(), weight, Box::new(DEFAULT_CMP));
-        if e == EdgeIndex::end() {
-            return None;
-        }
-        Some(self.edges.index(e.index()).get_target())
+        self.edge_target_cmp(a, weight, Box::new(DEFAULT_CMP))
     }
 
     // DONT USE THIS, here for legacy test reasons
     fn add_edge(&mut self, a: NodeIndex<Ix>, b: NodeIndex<Ix>, weight: E) -> Option<EdgeIndex<Ix>> {
-        let edge = Edge::new(weight, b);
+        let edge = AvlEdge::new(weight, b);
         let edge_idx = EdgeIndex::new(self.edges.len());
 
         // look for root, simple case where no root handled
@@ -649,13 +656,113 @@ where
     }
 }
 
+impl<N, E, Ix, Mb> Graph<N, E, Ix, Mb> for AvlGraph<N, E, Ix, Mb>
+where
+    N: Weight,
+    E: Copy + Debug,
+    Mb: MemoryBacking<N, E, Ix>, Ix: IndexType
+{
+    fn new_mb(mb: Mb) -> Self {
+        Self::new_mb(mb)
+    }
+    fn with_capacity_mb(
+        mb: Mb,
+        n_nodes: usize,
+        n_edges: usize,
+        cache_config: CacheConfig,
+    ) -> Self {
+        Self::with_capacity_mb(mb, n_nodes, n_edges, cache_config)
+    }
+    fn get_edge_by_weight(
+        &self,
+        a: NodeIndex<Ix>,
+        weight: E,
+        cmp: Box<dyn Comparator<E>>
+    ) -> Option<EdgeIndex<Ix>> {
+        self.get_edge_by_weight_cmp(a, weight, cmp)
+    }
+    fn n_edges(&self, a: NodeIndex<Ix>) -> usize {
+        self.n_edges(a)
+    }
+    fn node_count(&self) -> usize {
+        self.node_count()
+    }
+    fn edge_count(&self) -> usize {
+        self.edge_count()
+    }
+    fn neighbors(&self, node: NodeIndex<Ix>) -> Neighbors<N, E, Ix, Mb> {
+        self.neighbors(node)
+    }
+    fn edges(&self, edges: NodeIndex<Ix>) -> Edges<N, E, Ix, Mb> {
+        self.edges(edges)
+    }
+    fn get_node(&self, node: NodeIndex<Ix>) -> Mb::NodeRef {
+        self.get_node(node)
+    }
+    fn get_edge(&self, edge: EdgeIndex<Ix>) -> Mb::EdgeRef {
+        self.get_edge(edge)
+    }
+    fn edge_target(&self,
+                   a: NodeIndex<Ix>,
+                   weight: E,
+                   cmp: Box<dyn Comparator<E>>) -> Option<NodeIndex<Ix>> {
+        self.edge_target_cmp(a, weight, cmp)
+    }
+}
+
+impl<N, E, Ix, Mb> MutableGraph<N, E, Ix, Mb> for AvlGraph<N, E, Ix, Mb>
+where
+    N: Weight,
+    E: Copy + Debug,
+    Mb: MemoryBacking<N, E, Ix>, Ix: IndexType
+{
+    fn add_node(&mut self, weight: N) -> NodeIndex<Ix> {
+        self.add_node(weight)
+    }
+    fn clone_edges(&mut self, old: NodeIndex<Ix>, new: NodeIndex<Ix>) {
+        self.clone_edges(old, new)
+    }
+    fn add_edge(
+        &mut self,
+        a: NodeIndex<Ix>,
+        b: NodeIndex<Ix>,
+        weight: E,
+        cmp: Box<dyn Comparator<E>>,
+    ) {
+        self.add_balanced_edge_cmp(a, b, weight, cmp)
+    }
+    fn get_node_mut(&mut self, node: NodeIndex<Ix>) -> Mb::NodeMutRef {
+        self.get_node_mut(node)
+    }
+    fn get_edge_mut(&mut self, edge: EdgeIndex<Ix>) -> Mb::EdgeMutRef {
+        self.get_edge_mut(edge)
+    }
+    fn reroute_edge(&mut self,
+                    a: NodeIndex<Ix>,
+                    b: NodeIndex<Ix>,
+                    weight: E,
+                    cmp: Box<dyn Comparator<E>>) -> bool {
+        self.reroute_edge_cmp(a, b, weight, cmp)
+    }
+}
+impl<N, E, Ix, Mb> TreeGraph<N, E, Ix, Mb> for AvlGraph<N, E, Ix, Mb>
+where
+    N: Weight,
+    E: Copy + Debug,
+    Mb: MemoryBacking<N, E, Ix>, Ix: IndexType
+{
+    fn balance_ratio(&self, node: NodeIndex<Ix>) -> f64 {
+        self.balance_ratio(node)
+    }
+}
+
 #[cfg(test)]
 #[allow(unused_variables)]
 #[allow(unused_imports)]
 mod tests {
     use crate::cdawg::comparator::CdawgComparator;
-    use crate::graph::avl_graph::edge::EdgeRef;
-    use crate::graph::avl_graph::node::{NodeMutRef, NodeRef};
+    use crate::graph::avl_graph::avl_edge::EdgeRef;
+    use crate::graph::avl_graph::avl_node::{NodeMutRef, NodeRef};
     use crate::graph::avl_graph::AvlGraph;
     use crate::graph::indexing::{DefaultIx, EdgeIndex, IndexType, NodeIndex};
     use crate::weight::{DefaultWeight, Weight};

@@ -26,34 +26,40 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::convert::TryInto;
+use std::marker::PhantomData;
 use std::path::Path;
 use std::rc::Rc;
-
 use crate::cdawg::cdawg_state::CdawgState;
 use crate::cdawg::comparator::CdawgComparator;
 use crate::cdawg::metadata::CdawgMetadata;
 use crate::cdawg::token_backing::TokenBacking;
-use crate::graph::avl_graph::edge::EdgeMutRef;
-use crate::graph::avl_graph::node::NodeMutRef;
+use crate::graph::avl_graph::avl_edge::EdgeMutRef;
+use crate::graph::avl_graph::avl_node::NodeMutRef;
 use crate::graph::avl_graph::AvlGraph;
 use crate::graph::indexing::{DefaultIx, EdgeIndex, IndexType, NodeIndex};
-use crate::graph::{EdgeRef, NodeRef};
+use crate::graph::{EdgeRef, Graph, MutableGraph, NodeRef, TreeGraph};
 use crate::memory_backing::{CacheConfig, DiskBacking, MemoryBacking, RamBacking};
 use crate::weight::{DefaultWeight, Weight};
 
 // TODO: Add TokenBacking for tokens
 
-pub struct Cdawg<W = DefaultWeight, Ix = DefaultIx, Mb = RamBacking<W, (Ix, Ix), Ix>>
+pub struct Cdawg<
+    W = DefaultWeight,
+    Ix = DefaultIx,
+    Mb = RamBacking<W, (Ix, Ix), Ix>,
+    G = AvlGraph<W, (Ix, Ix), Ix, Mb>>
 where
     Ix: IndexType,
     W: Weight + Clone,
     Mb: MemoryBacking<W, (Ix, Ix), Ix>,
+    G: Graph<W, (Ix, Ix), Ix, Mb>,
 {
     tokens: Rc<RefCell<dyn TokenBacking<u16>>>,
-    graph: AvlGraph<W, (Ix, Ix), Ix, Mb>,
+    graph: G,
     source: NodeIndex<Ix>,
     sink: NodeIndex<Ix>,
     end_position: usize, // End position of current document.
+    phantom: PhantomData<(W, Ix, Mb, G)>,
 }
 
 impl<W, Ix> Cdawg<W, Ix>
@@ -67,7 +73,11 @@ where
     }
 }
 
-impl<W, Ix> Cdawg<W, Ix, DiskBacking<W, (Ix, Ix), Ix>>
+impl<W, Ix> Cdawg<W,
+    Ix,
+    DiskBacking<W,
+    (Ix, Ix), Ix>,
+    AvlGraph<W, (Ix, Ix), Ix, DiskBacking<W, (Ix, Ix), Ix>>>
 where
     Ix: IndexType + Serialize + for<'de> serde::Deserialize<'de>,
     W: Weight + Copy + Serialize + for<'de> Deserialize<'de> + Clone + Default,
@@ -80,7 +90,9 @@ where
     ) -> Result<Self> {
         // Load source/sink from config file if it exists.
         let path2 = path.clone();
-        let graph = AvlGraph::load(path, cache_config)?;
+        let graph =
+            AvlGraph::<W, (Ix, Ix), Ix, DiskBacking<W, (Ix, Ix), Ix>>
+            ::load::<P>(path, cache_config)?;
 
         let mut config_path = path2.as_ref().to_path_buf();
         config_path.push("metadata.json");
@@ -93,6 +105,7 @@ where
                 source: NodeIndex::new(config.source),
                 sink: NodeIndex::new(config.sink),
                 end_position: config.end_position,
+                phantom: PhantomData,
             })
         } else {
             Ok(Self {
@@ -101,20 +114,22 @@ where
                 source: NodeIndex::new(0),
                 sink: NodeIndex::new(1),
                 end_position: 0,
+                phantom: PhantomData,
             })
         }
     }
 }
 
-impl<W, Ix, Mb> Cdawg<W, Ix, Mb>
+impl<W, Ix, Mb, G> Cdawg<W, Ix, Mb, G>
 where
     Ix: IndexType,
     W: Weight + Serialize + for<'de> Deserialize<'de> + Clone,
     Mb: MemoryBacking<W, (Ix, Ix), Ix>,
     Mb::EdgeRef: Copy,
+    G: MutableGraph<W, (Ix, Ix), Ix, Mb>,
 {
-    pub fn new_mb(tokens: Rc<RefCell<dyn TokenBacking<u16>>>, mb: Mb) -> Cdawg<W, Ix, Mb> {
-        let mut graph: AvlGraph<W, (Ix, Ix), Ix, Mb> = AvlGraph::new_mb(mb);
+    pub fn new_mb(tokens: Rc<RefCell<dyn TokenBacking<u16>>>, mb: Mb) -> Cdawg<W, Ix, Mb, G> {
+        let mut graph: G = G::new_mb(mb);
         let source = graph.add_node(W::new(0, None, 0));
         // FIXME: Hacky type conversion for sink failure.
         let sink = graph.add_node(W::new(0, Some(NodeIndex::new(source.index())), 1));
@@ -124,6 +139,7 @@ where
             source,
             sink,
             end_position: 0,
+            phantom: PhantomData,
         }
     }
 
@@ -133,9 +149,9 @@ where
         n_nodes: usize,
         n_edges: usize,
         cache_config: CacheConfig,
-    ) -> Cdawg<W, Ix, Mb> {
-        let mut graph: AvlGraph<W, (Ix, Ix), Ix, Mb> =
-            AvlGraph::with_capacity_mb(mb, n_nodes, n_edges, cache_config);
+    ) -> Cdawg<W, Ix, Mb, G> {
+        let mut graph: G =
+            G::with_capacity_mb(mb, n_nodes, n_edges, cache_config);
         let source = graph.add_node(W::new(0, None, 0));
         // FIXME: Hacky type conversion for sink failure.
         let sink = graph.add_node(W::new(0, Some(NodeIndex::new(source.index())), 1));
@@ -145,6 +161,7 @@ where
             source,
             sink,
             end_position: 0,
+            phantom: PhantomData,
         }
     }
 
@@ -506,7 +523,7 @@ where
 
     // Convenience methods.
 
-    pub fn get_graph(&self) -> &AvlGraph<W, (Ix, Ix), Ix, Mb> {
+    pub fn get_graph(&self) -> &G {
         &self.graph
     }
 
@@ -522,24 +539,13 @@ where
         self.graph.edge_count()
     }
 
-    pub fn balance_ratio(&self, n_states: usize) -> f64 {
-        let mut max_ratio = 1.;
-        for _state in 0..n_states {
-            let ratio = self.graph.balance_ratio(self.get_source());
-            if ratio > max_ratio {
-                max_ratio = ratio;
-            }
-        }
-        max_ratio
-    }
-
     // Only well-defined when token is not end-of-text.
     pub fn get_edge_by_token(&self, state: NodeIndex<Ix>, token: u16) -> Option<EdgeIndex<Ix>> {
         if token != u16::MAX {
             let weight = (Ix::new(0), Ix::new(0)); // Doesn't matter.
             let cmp = CdawgComparator::new_with_token(self.tokens.clone(), token);
             self.graph
-                .get_edge_by_weight_cmp(state, weight, Box::new(cmp))
+                .get_edge_by_weight(state, weight, Box::new(cmp))
         } else {
             None
         }
@@ -555,7 +561,7 @@ where
         let token = self.tokens.borrow().get(token_idx);
         let cmp = CdawgComparator::new_with_token(self.tokens.clone(), token);
         self.graph
-            .get_edge_by_weight_cmp(state, weight, Box::new(cmp))
+            .get_edge_by_weight(state, weight, Box::new(cmp))
     }
 
     pub fn add_balanced_edge(
@@ -569,7 +575,7 @@ where
         let token = self.tokens.borrow().get(gamma.0 - 1); // Map to 0-indexed
         let cmp = CdawgComparator::new_with_token(self.tokens.clone(), token);
         self.graph
-            .add_balanced_edge_cmp(state, target, weight, Box::new(cmp))
+            .add_edge(state, target, weight, Box::new(cmp))
     }
 
     // Methods for inference with the CDAWG.
@@ -784,6 +790,26 @@ where
     }
 }
 
+impl<W, Ix, Mb, G> Cdawg<W, Ix, Mb, G>
+where
+    Ix: IndexType,
+    W: Weight + Serialize + for<'de> Deserialize<'de> + Clone,
+    Mb: MemoryBacking<W, (Ix, Ix), Ix>,
+    Mb::EdgeRef: Copy,
+    G: TreeGraph<W, (Ix, Ix), Ix, Mb>,
+{
+    pub fn balance_ratio(&self, n_states: usize) -> f64 {
+        let mut max_ratio = 1.;
+        for _state in 0..n_states {
+            let ratio = self.graph.balance_ratio(self.get_source());
+            if ratio > max_ratio {
+                max_ratio = ratio;
+            }
+        }
+        max_ratio
+    }
+}
+
 #[cfg(test)]
 #[allow(unused_variables)]
 #[allow(unused_imports)]
@@ -925,7 +951,7 @@ mod tests {
         cdawg.redirect_edge(cdawg.source, to_inenaga((0, 2)), target); // Arguments are 1-indexed
 
         let idx = cdawg.graph.get_node(cdawg.source).get_first_edge();
-        let edge: *const crate::graph::avl_graph::Edge<(DefaultIx, DefaultIx)> =
+        let edge: *const crate::graph::avl_graph::AvlEdge<(DefaultIx, DefaultIx)> =
             cdawg.graph.get_edge(idx);
         assert_eq!(edge.get_target().index(), target.index());
         // Graph is 0-indexed

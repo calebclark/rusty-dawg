@@ -6,8 +6,8 @@ pub use self::disk_backing::DiskBacking;
 pub use self::ram_backing::RamBacking;
 pub use self::vec_backing::{CacheConfig, CachedDiskVec, DiskVec};
 
-use crate::graph::avl_graph::edge::{Edge, EdgeMutRef, EdgeRef};
-use crate::graph::avl_graph::node::{Node, NodeMutRef, NodeRef};
+use crate::graph::avl_graph::avl_edge::{AvlEdge, EdgeMutRef, EdgeRef};
+use crate::graph::avl_graph::avl_node::{AvlNode, NodeMutRef, NodeRef};
 
 // Define the traits that submodules will implement in various ways.
 
@@ -21,8 +21,8 @@ where
     type NodeMutRef: NodeMutRef<Ix>;
     type EdgeMutRef: EdgeMutRef<E, Ix>;
 
-    type VecN: VecBacking<Node<N, Ix>, TRef = Self::NodeRef, TMutRef = Self::NodeMutRef>;
-    type VecE: VecBacking<Edge<E, Ix>, TRef = Self::EdgeRef, TMutRef = Self::EdgeMutRef>;
+    type VecN: VecBacking<AvlNode<N, Ix>, TRef = Self::NodeRef, TMutRef = Self::NodeMutRef>;
+    type VecE: VecBacking<AvlEdge<E, Ix>, TRef = Self::EdgeRef, TMutRef = Self::EdgeMutRef>;
 
     fn new_node_vec(&self, capacity: Option<usize>, cache_size: usize) -> Self::VecN;
 

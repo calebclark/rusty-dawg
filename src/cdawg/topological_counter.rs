@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-
+use crate::graph::MutableGraph;
 use crate::cdawg::inenaga::Cdawg;
 use crate::cdawg::stack::Stack;
 use crate::graph::indexing::{IndexType, NodeIndex};
@@ -51,11 +51,12 @@ where
 
 impl<Sb> TopologicalCounter<Sb> {
     /// DFS implementation of graph traversal.
-    pub fn fill_counts<Ix, W, Mb>(&mut self, cdawg: &mut Cdawg<W, Ix, Mb>)
+    pub fn fill_counts<Ix, W, Mb, G>(&mut self, cdawg: &mut Cdawg<W, Ix, Mb, G>)
     where
         Ix: IndexType + Serialize + for<'de> Deserialize<'de>,
         W: Weight + Serialize + for<'de> Deserialize<'de> + Clone,
         Mb: MemoryBacking<W, (Ix, Ix), Ix>,
+        G: MutableGraph<W, (Ix, Ix), Ix, Mb>,
         Sb: Stack<StackOp<Ix>>,
     {
         self.stack.push(StackOp::open(cdawg.get_source()));

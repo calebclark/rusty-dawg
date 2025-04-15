@@ -22,8 +22,8 @@ use crate::cdawg::token_backing::TokenBacking;
 use crate::cdawg::Cdawg;
 use crate::cdawg::TopologicalCounter;
 use crate::data_reader::{DataReader, JsonlReader, PileReader, TxtReader};
-use crate::graph::avl_graph::edge::Edge;
-use crate::graph::avl_graph::node::Node;
+use crate::graph::avl_graph::avl_edge::AvlEdge;
+use crate::graph::avl_graph::avl_node::AvlNode;
 use crate::graph::indexing::DefaultIx;
 use crate::io;
 use crate::io::Save;
@@ -54,10 +54,10 @@ where
     println!("  Ix: {}B", size_of::<DefaultIx>());
     println!("  N: {}B", size_of::<N>());
     println!("  E: {}B", size_of::<(DefaultIx, DefaultIx)>());
-    println!("  Node: {}B", size_of::<Node<N, DefaultIx>>());
+    println!("  Node: {}B", size_of::<AvlNode<N, DefaultIx>>());
     println!(
         "  Edge: {}B",
-        size_of::<Edge<(DefaultIx, DefaultIx), DefaultIx>>()
+        size_of::<AvlEdge<(DefaultIx, DefaultIx), DefaultIx>>()
     );
     println!();
 

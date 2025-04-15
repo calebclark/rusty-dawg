@@ -12,7 +12,7 @@ use std::fs;
 use std::io::Write;
 use std::marker::Copy;
 
-use crate::graph::avl_graph::node::NodeRef;
+use crate::graph::avl_graph::avl_node::NodeRef;
 
 #[derive(Serialize)]
 pub struct Evaluator<'a, E>

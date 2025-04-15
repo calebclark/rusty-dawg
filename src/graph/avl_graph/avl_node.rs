@@ -6,7 +6,7 @@ use crate::graph::indexing::{DefaultIx, EdgeIndex, IndexType, NodeIndex};
 use crate::weight::Weight;
 
 #[derive(Deserialize, Serialize, Copy, Default)]
-pub struct Node<N, Ix = DefaultIx> {
+pub struct AvlNode<N, Ix = DefaultIx> {
     #[serde(bound(
         serialize = "N: Serialize, Ix: Serialize",
         deserialize = "N: Deserialize<'de>, Ix: Deserialize<'de>",
@@ -15,7 +15,7 @@ pub struct Node<N, Ix = DefaultIx> {
     pub first_edge: EdgeIndex<Ix>,
 }
 
-impl<N, Ix> Node<N, Ix>
+impl<N, Ix> AvlNode<N, Ix>
 where
     Ix: IndexType + Copy,
 {
@@ -27,13 +27,13 @@ where
     }
 }
 
-impl<N, Ix> Clone for Node<N, Ix>
+impl<N, Ix> Clone for AvlNode<N, Ix>
 where
     N: Clone,
     Ix: Clone,
 {
     fn clone(&self) -> Self {
-        Node {
+        AvlNode {
             weight: self.weight.clone(),
             first_edge: self.first_edge.clone(),
         }
@@ -51,7 +51,7 @@ pub trait NodeRef<N, Ix> {
 }
 
 // We can use a Node object as a "reference" to data on disk.
-impl<N, Ix> NodeRef<N, Ix> for Node<N, Ix>
+impl<N, Ix> NodeRef<N, Ix> for AvlNode<N, Ix>
 where
     Ix: IndexType,
     N: Weight,
@@ -85,7 +85,7 @@ where
 }
 
 // FIXME(#52): We probably should not be allowing these clippy warnings but works for now :/
-impl<N, Ix> NodeRef<N, Ix> for *const Node<N, Ix>
+impl<N, Ix> NodeRef<N, Ix> for *const AvlNode<N, Ix>
 where
     Ix: IndexType,
     N: Weight,
@@ -133,7 +133,7 @@ pub trait NodeMutRef<Ix> {
     fn set_first_edge(self, first_edge: EdgeIndex<Ix>);
 }
 
-impl<N, Ix> NodeMutRef<Ix> for *mut Node<N, Ix>
+impl<N, Ix> NodeMutRef<Ix> for *mut AvlNode<N, Ix>
 where
     Ix: IndexType,
     N: Weight,
@@ -187,8 +187,8 @@ mod tests {
 
     #[test]
     fn test_serialize_deserialize_node() {
-        type NodeType = Node<DefaultWeight, DefaultIx>;
-        let node: NodeType = Node::new(DefaultWeight::new(42, Some(NodeIndex::new(2)), 2));
+        type NodeType = AvlNode<DefaultWeight, DefaultIx>;
+        let node: NodeType = AvlNode::new(DefaultWeight::new(42, Some(NodeIndex::new(2)), 2));
         let bytes = serialize(&node).unwrap();
         let new_node: NodeType = deserialize(&bytes).unwrap();
         assert_eq!(node.get_length(), new_node.get_length());
@@ -198,8 +198,8 @@ mod tests {
 
     #[test]
     fn test_serialize_deserialize_node_with_fixint() {
-        type T = Node<DefaultWeight, DefaultIx>;
-        let node: T = Node::new(DefaultWeight::new(42, Some(NodeIndex::new(2)), 2));
+        type T = AvlNode<DefaultWeight, DefaultIx>;
+        let node: T = AvlNode::new(DefaultWeight::new(42, Some(NodeIndex::new(2)), 2));
         let bytes = bincode::DefaultOptions::new()
             .with_fixint_encoding()
             .serialize(&node)

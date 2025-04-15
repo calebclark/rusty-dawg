@@ -4,7 +4,7 @@ use std::clone::Clone;
 use crate::graph::indexing::{DefaultIx, EdgeIndex, IndexType, NodeIndex};
 
 #[derive(Serialize, Deserialize, Default, Copy)]
-pub struct Edge<E, Ix = DefaultIx> {
+pub struct AvlEdge<E, Ix = DefaultIx> {
     #[serde(bound(
         serialize = "E: Serialize, Ix: Serialize",
         deserialize = "E: Deserialize<'de>, Ix: Deserialize<'de>",
@@ -16,13 +16,13 @@ pub struct Edge<E, Ix = DefaultIx> {
     pub balance_factor: i8,
 }
 
-impl<E, Ix> Clone for Edge<E, Ix>
+impl<E, Ix> Clone for AvlEdge<E, Ix>
 where
     E: Clone,
     Ix: Clone,
 {
     fn clone(&self) -> Self {
-        Edge {
+        AvlEdge {
             weight: self.weight.clone(),
             target: self.target.clone(),
             left: self.left.clone(),
@@ -32,7 +32,7 @@ where
     }
 }
 
-impl<E, Ix> Edge<E, Ix>
+impl<E, Ix> AvlEdge<E, Ix>
 where
     Ix: IndexType + Copy,
     E: Copy,
@@ -57,7 +57,7 @@ pub trait EdgeRef<E, Ix> {
 }
 
 // We can use an Edge object as a "reference" to data on disk.
-impl<E, Ix> EdgeRef<E, Ix> for Edge<E, Ix>
+impl<E, Ix> EdgeRef<E, Ix> for AvlEdge<E, Ix>
 where
     Ix: IndexType + Copy,
     E: Copy,
@@ -85,7 +85,7 @@ where
 
 // We can use a pointer to an Edge object as a reference to data in RAM.
 // FIXME(#52): Probably should not be allowing unsafe pointer derefs
-impl<E, Ix> EdgeRef<E, Ix> for *const Edge<E, Ix>
+impl<E, Ix> EdgeRef<E, Ix> for *const AvlEdge<E, Ix>
 where
     Ix: IndexType + Copy,
     E: Copy,
@@ -124,7 +124,7 @@ pub trait EdgeMutRef<E, Ix> {
     fn set_balance_factor(self, bf: i8);
 }
 
-impl<E, Ix> EdgeMutRef<E, Ix> for *mut Edge<E, Ix>
+impl<E, Ix> EdgeMutRef<E, Ix> for *mut AvlEdge<E, Ix>
 where
     E: Copy,
     Ix: IndexType + Copy,
@@ -165,7 +165,7 @@ where
     }
 }
 
-impl<E, Ix> EdgeMutRef<E, Ix> for &mut Edge<E, Ix>
+impl<E, Ix> EdgeMutRef<E, Ix> for &mut AvlEdge<E, Ix>
 where
     E: Copy,
     Ix: IndexType + Copy,

@@ -1,4 +1,4 @@
-// Comparator for CdawgEdgeWeights that looks them up in tokens.
+// Comparator for Cdawg index pairs that looks them up in tokens.
 
 use comparator::Comparator;
 use std::cell::RefCell;

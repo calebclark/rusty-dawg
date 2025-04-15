@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::cdawg::inenaga::Cdawg;
 use crate::cdawg::stack::Stack;
 use crate::graph::indexing::{IndexType, NodeIndex};
+use crate::graph::MutableGraph;
 use crate::memory_backing::{DiskVec, MemoryBacking};
 use crate::weight::Weight;
 
@@ -44,12 +45,13 @@ where
 
 impl<Sb> TraverseArity<Sb> {
     /// DFS implementation of graph traversal.
-    pub fn traverse_arity<Ix, W, Mb>(&mut self, cdawg: &mut Cdawg<W, Ix, Mb>) -> Vec<usize>
+    pub fn traverse_arity<Ix, W, Mb, G>(&mut self, cdawg: &mut Cdawg<W, Ix, Mb, G>) -> Vec<usize>
     where
         Ix: IndexType + Serialize + for<'de> Deserialize<'de>,
         W: Weight + Serialize + for<'de> Deserialize<'de> + Clone,
         Mb: MemoryBacking<W, (Ix, Ix), Ix>,
         Sb: Stack<usize>,
+        G: MutableGraph<W, (Ix, Ix), Ix, Mb>,
     {
         let mut arities = Vec::with_capacity(self.visited.len());
         self.stack.push(cdawg.get_source().index());
