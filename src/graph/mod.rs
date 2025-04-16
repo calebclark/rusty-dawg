@@ -2,6 +2,7 @@ pub mod avl_graph;
 #[allow(dead_code)]
 pub mod indexing;
 pub mod comparator;
+pub mod array_graph;
 
 use ::comparator::Comparator;
 use crate::graph::avl_graph::{Edges, Neighbors};
@@ -65,4 +66,14 @@ where
     Mb: MemoryBacking<N, E, Ix>, Ix: IndexType
 {
     fn balance_ratio(&self, node: NodeIndex<Ix>) -> f64;
+}
+
+pub trait NodeRef<N, Ix> {
+    fn get_weight(self) -> N
+    where
+        N: Clone;
+    fn get_length(self) -> u64;
+    fn get_failure(self) -> Option<NodeIndex<Ix>>;
+    fn get_count(self) -> usize;
+    fn get_first_edge(self) -> EdgeIndex<Ix>;
 }

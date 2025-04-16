@@ -7,42 +7,46 @@ use crate::graph::NodeRef;
 use crate::weight::Weight;
 
 #[derive(Deserialize, Serialize, Copy, Default)]
-pub struct AvlNode<N, Ix = DefaultIx> {
+pub struct ArrayNode<N, Ix = DefaultIx> {
     #[serde(bound(
         serialize = "N: Serialize, Ix: Serialize",
         deserialize = "N: Deserialize<'de>, Ix: Deserialize<'de>",
     ))]
     pub weight: N,
-    pub first_edge: EdgeIndex<Ix>,
+    pub first_edge_index: Ix,
+    // We could play with the size here if we have an idea of the maximum nodes per edges
+    pub num_edges: i32,
 }
 
-impl<N, Ix> AvlNode<N, Ix>
+impl<N, Ix> ArrayNode<N, Ix>
 where
     Ix: IndexType + Copy,
 {
-    pub fn new(weight: N) -> Self {
+    pub fn new(weight: N, first_edge_index: Ix, num_edges: i32) -> Self {
         Self {
             weight,
-            first_edge: EdgeIndex::end(),
+            first_edge_index,
+            num_edges,
         }
     }
 }
 
-impl<N, Ix> Clone for AvlNode<N, Ix>
+impl<N, Ix> Clone for ArrayNode<N, Ix>
 where
     N: Clone,
     Ix: Clone,
 {
     fn clone(&self) -> Self {
-        AvlNode {
+        ArrayNode {
             weight: self.weight.clone(),
-            first_edge: self.first_edge.clone(),
+            first_edge_index: self.first_edge_index.clone(),
+            num_edges: self.num_edges,
         }
     }
 }
 
 // We can use a Node object as a "reference" to data on disk.
-impl<N, Ix> NodeRef<N, Ix> for AvlNode<N, Ix>
+impl<N, Ix> NodeRef<N, Ix> for ArrayNode<N, Ix>
 where
     Ix: IndexType,
     N: Weight,
