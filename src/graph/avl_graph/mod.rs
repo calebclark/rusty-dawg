@@ -17,7 +17,7 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 
 use crate::graph::indexing::{DefaultIx, EdgeIndex, IndexType, NodeIndex};
-use crate::memory_backing::{CacheConfig, DiskVec};
+use crate::memory_backing::{CacheConfig, DiskVec, ImmutableVecBacking};
 use crate::weight::Weight;
 
 mod comparator;

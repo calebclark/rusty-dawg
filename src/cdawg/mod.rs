@@ -8,6 +8,7 @@ mod inenaga; // Algo from "On-line construction of compact directed acyclic word
 mod metadata;
 mod stack;
 pub mod token_backing;
+mod immutable_cdawg;
 
 // We will use the Inenaga implementation of the build algorithm.
 pub use self::inenaga::Cdawg;

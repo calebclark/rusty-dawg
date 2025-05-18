@@ -1,26 +1,30 @@
-use crate::memory_backing::VecBacking;
+use crate::memory_backing::{ImmutableVecBacking, VecBacking};
 
 // FIXME: Did this with unsafe pointers for convenience but would be good to use &/&mut!
-impl<T> VecBacking<T> for Vec<T> {
+
+impl<T> ImmutableVecBacking<T> for Vec<T> {
     type TRef = *const T;
-    type TMutRef = *mut T;
 
     fn len(&self) -> usize {
         Vec::len(self)
     }
 
-    fn push(&mut self, item: T) {
-        Vec::push(self, item);
-    }
-
     fn index(&self, index: usize) -> Self::TRef {
         &self[index]
+    }
+}
+impl<T> VecBacking<T> for Vec<T> {
+    type TMutRef = *mut T;
+
+    fn push(&mut self, item: T) {
+        Vec::push(self, item);
     }
 
     fn index_mut(&mut self, index: usize) -> Self::TMutRef {
         &mut self[index]
     }
 }
+
 
 #[cfg(test)]
 #[allow(unused_imports)]

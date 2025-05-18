@@ -8,6 +8,8 @@ pub use self::vec_backing::{CacheConfig, CachedDiskVec, DiskVec};
 
 use crate::graph::avl_graph::edge::{Edge, EdgeMutRef, EdgeRef};
 use crate::graph::avl_graph::node::{Node, NodeMutRef, NodeRef};
+use crate::graph::array_graph::node::{ArrayNodeRef};
+use crate::graph::array_graph::edge::{ArrayEdgeRef};
 
 // Define the traits that submodules will implement in various ways.
 
@@ -29,19 +31,42 @@ where
     fn new_edge_vec(&self, capacity: Option<usize>, cache_size: usize) -> Self::VecE;
 }
 
-pub trait VecBacking<T> {
+pub trait ImmutableVecBacking<T> {
     type TRef;
-    type TMutRef;
 
     fn len(&self) -> usize;
 
-    fn push(&mut self, item: T);
-
     fn index(&self, index: usize) -> Self::TRef;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+pub trait VecBacking<T> : ImmutableVecBacking<T> {
+    type TMutRef;
+
+    fn push(&mut self, item: T);
 
     fn index_mut(&mut self, index: usize) -> Self::TMutRef;
 
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+}
+
+pub trait ArrayMemoryBacking<N, E, Ix>
+where
+    Self: Clone,
+    Self::ArrayEdgeRef: Copy,
+{
+    type ArrayNodeRef: ArrayNodeRef<N, Ix>;
+    type ArrayEdgeRef: ArrayEdgeRef<E, Ix>;
+
+    type ArrayVecN: ImmutableVecBacking<Node<N, Ix>, TRef = Self::ArrayNodeRef>;
+    type ArrayVecE: ImmutableVecBacking<Edge<E, Ix>, TRef = Self::ArrayEdgeRef>;
+
+    fn new_array_node_vec(&self, capacity: Option<usize>, cache_size: usize) -> Self::ArrayVecN;
+
+    fn new_array_edge_vec(&self, capacity: Option<usize>, cache_size: usize) -> Self::ArrayVecE;
 }
