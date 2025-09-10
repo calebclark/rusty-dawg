@@ -510,6 +510,19 @@ where
         &self.graph
     }
 
+    /*
+     * Dump all of this cdawg's data
+     */
+    pub fn get_data_ownership(self)
+        -> (Rc<RefCell<dyn TokenBacking<u16>>>,
+            AvlGraph<W, CdawgEdgeWeight<Ix>, Ix, Mb>,
+            NodeIndex<Ix>,
+            NodeIndex<Ix>,
+            usize) {
+        (self.tokens, self.graph, self.source, self.sink, self.end_position)
+    }
+
+
     pub fn get_source(&self) -> NodeIndex<Ix> {
         self.source
     }

@@ -21,6 +21,7 @@ use crate::build_stats::BuildStats;
 use crate::cdawg::cdawg_edge_weight::CdawgEdgeWeight;
 use crate::cdawg::token_backing::TokenBacking;
 use crate::cdawg::Cdawg;
+use crate::cdawg::immutable_cdawg::ImmutableCdawg;
 use crate::cdawg::TopologicalCounter;
 use crate::data_reader::{DataReader, JsonlReader, PileReader, TxtReader};
 use crate::graph::avl_graph::edge::Edge;
@@ -28,8 +29,9 @@ use crate::graph::avl_graph::node::Node;
 use crate::graph::indexing::DefaultIx;
 use crate::io;
 use crate::io::Save;
-use crate::memory_backing::{DiskVec, MemoryBacking};
+use crate::memory_backing::{DiskBacking, DiskVec, MemoryBacking};
 use crate::tokenize::{NullTokenIndex, PretrainedTokenizer, TokenIndex, Tokenize};
+use crate::weight::DefaultWeight;
 
 type N = super::N;
 type E = CdawgEdgeWeight<DefaultIx>;
@@ -176,12 +178,24 @@ where
     println!();
 
     // TODO: Simplify this logic and the associated flags.
-    if !args.save_path.is_empty() {
-        println!("Saving DAWG...");
-        let _ = cdawg.save(&args.save_path);
-        println!("Successfully saved DAWG to {}!", &args.save_path);
-    } else if let Some(disk_path) = args.disk_path {
-        let _ = cdawg.save(disk_path.as_str());
+    let mut path = args.save_path;
+    if path.is_empty() && args.disk_path.is_some(){
+        path = args.disk_path.unwrap();
+    }
+    if !path.is_empty() {
+        if args.immutable {
+            println!("Building immutable copy of CDAWG on disk...");
+            let mb: DiskBacking<N, E, DefaultIx> = DiskBacking::new(path);
+            let cache_config = args.get_cache_config();
+
+            let icdawg =
+                ImmutableCdawg::<N, DefaultIx, DiskBacking<N, E, DefaultIx>>::new_mb(cdawg, mb, cache_config);
+
+        } else {
+            println!("Saving CDAWG...");
+            let _ = cdawg.save(path.as_str());
+            println!("Successfully saved CDAWG to {}!", path);
+        }
     }
     Ok(())
 }

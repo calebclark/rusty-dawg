@@ -17,7 +17,7 @@ use std::cmp::{max, min};
 use std::fmt::Debug;
 
 use crate::graph::indexing::{DefaultIx, EdgeIndex, IndexType, NodeIndex};
-use crate::memory_backing::{CacheConfig, DiskVec};
+use crate::memory_backing::{CacheConfig, DiskVec, InternallyImmutableVecBacking};
 use crate::weight::Weight;
 
 mod comparator;
@@ -464,6 +464,10 @@ where
         Edges::new(self, edges)
     }
 
+    pub fn ordered_edges(&self, edges: NodeIndex<Ix>) -> OrderedEdges<N, E, Ix, Mb> {
+        OrderedEdges::new(self, edges)
+    }
+
     // We can't use standard indexing because we have custom reference types.
 
     pub fn get_node(&self, node: NodeIndex<Ix>) -> Mb::NodeRef {
@@ -649,6 +653,67 @@ where
     }
 }
 
+pub struct OrderedEdges<'a, N, E, Ix, Mb>
+where
+    Mb: MemoryBacking<N, E, Ix>,
+    Ix: IndexType,
+{
+    graph: &'a AvlGraph<N, E, Ix, Mb>,
+    stack: Vec<EdgeIndex<Ix>>,
+}
+
+impl<N, E, Ix, Mb> Iterator for OrderedEdges<'_, N, E, Ix, Mb>
+where
+    Mb: MemoryBacking<N, E, Ix>,
+    Ix: IndexType,
+    Mb::EdgeRef: Sized,
+{
+    // Was: type Item = &'a Edge<E, Ix>;
+    // Should be: type Item = Mb::EdgeRef<'a>;
+    type Item = Mb::EdgeRef;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Is this pop_back()????
+        match self.stack.pop() {
+            None => None,
+            Some(idx) => {
+                if idx == EdgeIndex::end() {
+                    // Only hit for an empty tree.
+                    return None;
+                }
+                let right = self.graph.edges.index(idx.index()).get_right();
+                if right != EdgeIndex::end() {
+                    self.stack.push(right);
+                    let mut left = self.graph.edges.index(self.stack[self.stack.len() - 1].index()).get_left();
+                    while left != EdgeIndex::end() {
+                        self.stack.push(left);
+                        left = self.graph.edges.index(self.stack[self.stack.len() - 1].index()).get_left();
+                    }
+                }
+                Some(self.graph.edges.index(idx.index()))
+            }
+        }
+    }
+}
+
+impl<'a, N, E, Ix, Mb> OrderedEdges<'a, N, E, Ix, Mb>
+where
+    Mb: MemoryBacking<N, E, Ix>,
+    Ix: IndexType,
+{
+    pub fn new(graph: &'a AvlGraph<N, E, Ix, Mb>, node: NodeIndex<Ix>) -> Self {
+        let root = graph.nodes.index(node.index()).get_first_edge();
+        let mut stack = vec![root];
+        let mut left = graph.edges.index(stack[stack.len() - 1].index()).get_left();
+        while left != EdgeIndex::end() {
+            stack.push(left);
+            left = graph.edges.index(stack[stack.len() - 1].index()).get_left();
+        }
+
+        Self { graph, stack }
+    }
+}
+
 #[cfg(test)]
 #[allow(unused_variables)]
 #[allow(unused_imports)]
@@ -657,7 +722,7 @@ mod tests {
     use crate::cdawg::comparator::CdawgComparator;
     use crate::graph::avl_graph::edge::EdgeRef;
     use crate::graph::avl_graph::node::{NodeMutRef, NodeRef};
-    use crate::graph::avl_graph::AvlGraph;
+    use crate::graph::avl_graph::{AvlGraph, OrderedEdges};
     use crate::graph::indexing::{DefaultIx, EdgeIndex, IndexType, NodeIndex};
     use crate::weight::{DefaultWeight, Weight};
     use std::cell::RefCell;
@@ -892,5 +957,26 @@ mod tests {
         let idx0 = NodeIndex::new(0);
         graph.get_node_mut(idx0).set_length(1);
         assert_eq!(graph.get_node(idx0).get_length(), 1);
+    }
+
+    #[test]
+    fn test_ordered_edges() {
+        let weight = DefaultWeight::new(0, None, 0);
+        let mut graph: AvlGraph<DefaultWeight, u16> = AvlGraph::new();
+        let q0 = graph.add_node(weight);
+        let q1 = graph.add_node(weight);
+
+        let weights: [u16; 10] = [10, 1, 11, 7, 5, 6, 9, 13, 15, 8];
+        let expected: [u16; 10] = [1, 5, 6, 7, 8, 9, 10, 11, 13, 15];
+
+        for weight in weights.iter() {
+            graph.add_balanced_edge(q0, q1, *weight);
+        }
+
+        let mut i = 0;
+        for edge in graph.ordered_edges(q0) {
+            assert_eq!(expected[i], edge.get_weight());
+            i += 1;
+        }
     }
 }
