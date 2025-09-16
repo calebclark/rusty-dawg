@@ -113,11 +113,6 @@ pub struct Args {
     #[arg(long, default_value_t = -1)]
     max_state_length: i64,
 
-    // todo: #112
-    /// Path to save the DAWG. This is the same as `save_path`. We should fix that.
-    #[arg(long)]
-    disk_path: Option<String>,
-
     /// Token used to split documents when `data_reader` is `txt`.
     #[arg(long)]
     split_token: Option<String>,
@@ -208,76 +203,56 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("--immutable can only be used with --cdawg");
     }
 
-    if args.cdawg {
-        return match args.disk_path.clone() {
-            Some(path) => {
-                if args.ram {
-                    println!("Building CDAWG in RAM but saving on disk...");
-                    type Mb = RamBacking<N, (DefaultIx, DefaultIx), DefaultIx>;
-                    let mb = Mb::default();
-                    return Ok(build_cdawg::<Mb>(args, mb)?);
-                }
-                println!("Building CDAWG on disk...");
-                type Mb = DiskBacking<N, (DefaultIx, DefaultIx), DefaultIx>;
-                let mb = Mb::new(path);
-                Ok(build_cdawg::<Mb>(args, mb)?)
-            }
-            None => {
-                println!("Building CDAWG in RAM...");
-                type Mb = RamBacking<N, (DefaultIx, DefaultIx), DefaultIx>;
-                let mb = Mb::default();
-                Ok(build_cdawg::<Mb>(args, mb)?)
-            }
-        };
+    if args.save_path.is_empty() {
+        panic!("save_path is a required argument");
     }
 
-    match args.disk_path.clone() {
-        Some(path) => println!("DAWG on disk: {}", path),
-        None => println!("DAWG in RAM"),
-    };
+    if args.cdawg {
+        if args.ram {
+            println!("Building CDAWG in RAM but saving on disk...");
+            type Mb = RamBacking<N, (DefaultIx, DefaultIx), DefaultIx>;
+            let mb = Mb::default();
+            return Ok(build_cdawg::<Mb>(args, mb)?);
+        }
+        println!("Building CDAWG on disk...");
+        type Mb = DiskBacking<N, (DefaultIx, DefaultIx), DefaultIx>;
+        let mb = Mb::new(args.save_path.clone());
+        return Ok(build_cdawg::<Mb>(args, mb)?);
+    }
 
     // Messy, but it works.
     if args.utype == "u16" {
         type E = u16;
-        match args.disk_path.clone() {
-            Some(path) => {
-                type Mb = DiskBacking<N, E, DefaultIx>;
-                let mb = Mb::new(path);
-                run_rusty_dawg::<E, Mb>(args, mb)
-            }
-            None => {
-                type Mb = RamBacking<N, E, DefaultIx>;
-                let mb = Mb::default();
-                run_rusty_dawg::<E, Mb>(args, mb)
-            }
+        if args.ram {
+            type Mb = RamBacking<N, E, DefaultIx>;
+            let mb = Mb::default();
+            run_rusty_dawg::<E, Mb>(args, mb)
+        } else {
+            type Mb = DiskBacking<N, E, DefaultIx>;
+            let mb = Mb::new(args.save_path.clone());
+            run_rusty_dawg::<E, Mb>(args, mb)
         }
     } else if args.utype == "u32" {
         type E = u32;
-        match args.disk_path.clone() {
-            Some(path) => {
-                type Mb = DiskBacking<N, E, DefaultIx>;
-                let mb = Mb::new(path);
-                run_rusty_dawg::<E, Mb>(args, mb)
-            }
-            None => {
-                type Mb = RamBacking<N, E, DefaultIx>;
-                let mb = Mb::default();
-                run_rusty_dawg::<E, Mb>(args, mb)
-            }
+        if args.ram {
+            type Mb = RamBacking<N, E, DefaultIx>;
+            let mb = Mb::default();
+            run_rusty_dawg::<E, Mb>(args, mb)
+        } else {
+            type Mb = DiskBacking<N, E, DefaultIx>;
+            let mb = Mb::new(args.save_path.clone());
+            run_rusty_dawg::<E, Mb>(args, mb)
         }
     } else if args.utype == "usize" {
         type E = usize;
-        match args.disk_path.clone() {
-            Some(path) => {
-                type Mb = DiskBacking<N, E, DefaultIx>;
-                let mb = Mb::new(path);
-                run_rusty_dawg::<E, Mb>(args, mb)
-            }
-            None => {
-                type Mb = RamBacking<N, E, DefaultIx>;
-                let mb = Mb::default();
-                run_rusty_dawg::<E, Mb>(args, mb)
-            }
+        if args.ram {
+            type Mb = RamBacking<N, E, DefaultIx>;
+            let mb = Mb::default();
+            run_rusty_dawg::<E, Mb>(args, mb)
+        } else {
+            type Mb = DiskBacking<N, E, DefaultIx>;
+            let mb = Mb::new(args.save_path.clone());
+            run_rusty_dawg::<E, Mb>(args, mb)
         }
     } else {
         panic!("Invalid usize type: {}", args.utype);
